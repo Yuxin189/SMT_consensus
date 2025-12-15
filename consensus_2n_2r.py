@@ -1,70 +1,95 @@
+# two nodes: A, B ; two rounds: 1, 2
 from z3 import *
 
-def check_consensus_2n_2r():
+def check_2n2r_receive0():
     s = Solver()
 
-    # Two nodes: 0, 1
-    # Two rounds: 0 (init), 1, 2
-    N = 2
-    R = 2
+    # Nodes: A=0, B=1
+    A, B = 0, 1
+    # T: 0 means init, 1 means round1 ends, 2 means round2 ends
+    T = [0, 1, 2]
+    # ROUNDS: sending message
+    ROUNDS = [1, 2]
 
-    init = [Bool(f"init_{i}") for i in range(N)]
-    alive = [[Bool(f"alive_{i}_{r}") for r in range(R + 1)] for i in range(N)]
-    seen1 = [[Bool(f"seen1_{i}_{r}") for r in range(R + 1)] for i in range(N)]
-    deliver = [[[Bool(f"del_{src}_{dst}_{r}") for r in range(1, R + 1)]
-                for dst in range(N)] for src in range(N)]
+    # initX: True means initial value is 1, False means initial value is 0
+    initA, initB = Bools("initA initB")
 
-    # Everyone alive initially
-    for i in range(N):
-        s.add(alive[i][0] == True)
+    # C_X_t : True means node X has crashed by end of round t (will not return)
+    C_A = [Bool(f"C_A_{t}") for t in T]
+    C_B = [Bool(f"C_B_{t}") for t in T]
 
-    # Crash is permanent
-    for i in range(N):
-        for r in range(1, R + 1):
-            s.add(Implies(alive[i][r], alive[i][r - 1]))
+    # M_XY_t : True means message from node X to node Y in round t is delivered
+    M_AB = {t: Bool(f"M_AB_{t}") for t in ROUNDS}
+    M_BA = {t: Bool(f"M_BA_{t}") for t in ROUNDS}
 
-    # At least one survivor at the end
-    s.add(Or(alive[0][R], alive[1][R]))
+    # S_X_t : True means node X has received 0 by end of round t
+    S_A = [Bool(f"S_A_{t}") for t in T]
+    S_B = [Bool(f"S_B_{t}") for t in T]
 
-    # Delivery rule (synchronous + crash with partial delivery)
-    for src in range(N):
-        for dst in range(N):
-            if src == dst:
-                continue
-            for r in range(1, R + 1):
-                s.add(Implies(
-                    And(alive[src][r], alive[dst][r]),
-                    deliver[src][dst][r - 1]
-                ))
+    # Every nodes survive initially
+    s.add(C_A[0] == False)
+    s.add(C_B[0] == False)
 
-    # Protocol
-    for i in range(N):
-        s.add(seen1[i][0] == init[i])
+    # Nodes can crash at any round and will not return if they do so: C(t) -> C(t+1)
+    s.add(Implies(C_A[0], C_A[1]))
+    s.add(Implies(C_A[1], C_A[2]))
+    s.add(Implies(C_B[0], C_B[1]))
+    s.add(Implies(C_B[1], C_B[2]))
 
-    for i in range(N):
-        for r in range(1, R + 1):
-            s.add(seen1[i][r] ==
-                  Or(
-                      seen1[i][r - 1],
-                      And(deliver[1 - i][i][r - 1], seen1[1 - i][r - 1])
-                  ))
+    # We can assume there is always a surviving (non-crashed) node at the end
+    s.add(Or(Not(C_A[2]), Not(C_B[2])))
 
-    decision = [seen1[i][R] for i in range(N)]
+    # If a node crashes, only some of its messages can be assumed lost, i.e., its message may be received by some nodes but not others.
+    # If both sender and receiver survive at the end of round r, delivery must happen in round r
+    for t in ROUNDS:
+        s.add(Implies(And(Not(C_A[t]), Not(C_B[t])), M_AB[t]))
+        s.add(Implies(And(Not(C_A[t]), Not(C_B[t])), M_BA[t]))
 
-    # Try to violate agreement
-    s.add(alive[0][R])
-    s.add(alive[1][R])
-    s.add(decision[0] != decision[1])
 
-    print("Checking 2-node 2-round consensus...")
-    result = s.check()
-    print("Result:", result)
+### Protocol: if receive 0 then become 0
+    s.add(S_A[0] == Not(initA))
+    s.add(S_B[0] == Not(initB))
 
-    if result == sat:
-        print("Counterexample:")
-        print(s.model())
+    # Round 1:
+    # S_A(1) = S_A(0) OR (M_BA(1) AND S_B(0))
+    # S_B(1) = S_B(0) OR (M_AB(1) AND S_A(0))
+    s.add(S_A[1] == Or(S_A[0], And(M_BA[1], S_B[0])))
+    s.add(S_B[1] == Or(S_B[0], And(M_AB[1], S_A[0])))
+
+    # Round 2:
+    s.add(S_A[2] == Or(S_A[1], And(M_BA[2], S_B[1])))
+    s.add(S_B[2] == Or(S_B[1], And(M_AB[2], S_A[1])))
+
+    # Decision: decide 0 iff receive0; else decide 1
+    # True means decide 1, False means decide 0
+    Decide1_A = Bool("Decide1_A")
+    Decide1_B = Bool("Decide1_B")
+    s.add(Decide1_A == Not(S_A[2]))
+    s.add(Decide1_B == Not(S_B[2]))
+
+    # Check agreement by searching a counterexample
+    # Both survive -> decisions differ
+    s.add(Not(C_A[2]))          # A survives to the end
+    s.add(Not(C_B[2]))          # B survives to the end
+    s.add(Decide1_A != Decide1_B)  # disagreement
+
+    print("Checking 2-node 2-round for a disagreement counterexample...")
+    res = s.check()
+    print("Result:", res)
+
+    if res == sat:
+        m = s.model()
+        print("Counterexample found:")
+        print(" initA (True=1):", m.evaluate(initA))
+        print(" initB (True=1):", m.evaluate(initB))
+        for t in T:
+            print(f" C_A_{t}:", m.evaluate(C_A[t]), f" C_B_{t}:", m.evaluate(C_B[t]),
+                  f" S_A_{t}:", m.evaluate(S_A[t]), f" S_B_{t}:", m.evaluate(S_B[t]))
+        for t in ROUNDS:
+            print(f" M_AB_{t}:", m.evaluate(M_AB[t]), f" M_BA_{t}:", m.evaluate(M_BA[t]))
+        print(" Decide1_A:", m.evaluate(Decide1_A), " Decide1_B:", m.evaluate(Decide1_B))
     else:
-        print("No counterexample. Agreement holds.")
+        print("No counterexample. Agreement holds (under these constraints).")
 
 if __name__ == "__main__":
-    check_consensus_2n_2r()
+    check_2n2r_receive0()
