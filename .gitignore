@@ -1,3 +1,10 @@
+# macOS
+.DS_Store
+
+# C build
+c_version/*.o
+c_version/cegis
+
 # Python
 venv/
 __pycache__/

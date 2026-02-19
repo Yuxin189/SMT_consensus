@@ -123,4 +123,4 @@ def check_nnmr_receive0(N: int, R: int):
     s.pop()
 
 if __name__ == "__main__":
-    check_nnmr_receive0(N=10, R=8)
+    check_nnmr_receive0(N=10, R=7)
