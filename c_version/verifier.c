@@ -16,7 +16,7 @@ static int is_true(Z3_context ctx, Z3_model m, Z3_ast a) {
     return Z3_get_bool_value(ctx, val) == Z3_L_TRUE;
 }
 
-int verify(Z3_context ctx, const protocol_t *protocol, const int patterns[][NUM_NODES],
+int verify(Z3_context ctx, const protocol_t *protocol, const int *patterns,
             counter_example_t *cex, timing_t *timing) {
     Z3_solver s = Z3_mk_solver(ctx);
     Z3_solver_inc_ref(ctx, s);
@@ -143,12 +143,14 @@ int verify(Z3_context ctx, const protocol_t *protocol, const int patterns[][NUM_
     Z3_solver_assert(ctx, s, Z3_mk_or(ctx, NUM_NODES, survivors));
     free(violations);
 
+    double t_gen = now() - t_start;   /* time to build formula (env + loss + trace + violations) */
+    double t_before_solve = now();
     Z3_lbool result = Z3_solver_check(ctx, s);
-    double t_solve = now() - t_start;
+    double t_solve = now() - t_before_solve;
 
-    /* 只有 unsat 才算验证通过；unknown（如 Ctrl+C 中断）不能当成功 */
+    /* Only UNSAT counts as verified; unknown (e.g. Ctrl+C) must not be treated as success */
     if (result == Z3_L_FALSE) {
-        timing->gen = 0;
+        timing->gen = t_gen;
         timing->solve = t_solve;
         timing->model = 0;
         timing->total = now() - t_start;
@@ -156,7 +158,7 @@ int verify(Z3_context ctx, const protocol_t *protocol, const int patterns[][NUM_
         return 2; /* verified */
     }
     if (result == Z3_L_UNDEF) {
-        timing->gen = 0;
+        timing->gen = t_gen;
         timing->solve = t_solve;
         timing->model = 0;
         timing->total = now() - t_start;
@@ -190,7 +192,7 @@ int verify(Z3_context ctx, const protocol_t *protocol, const int patterns[][NUM_
     Z3_model_dec_ref(ctx, m);
     Z3_solver_dec_ref(ctx, s);
 
-    timing->gen = 0;
+    timing->gen = t_gen;
     timing->solve = t_solve;
     timing->model = t_model;
     timing->total = now() - t_start;

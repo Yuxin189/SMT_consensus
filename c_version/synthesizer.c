@@ -11,25 +11,25 @@ static double now(void) {
 }
 
 bool synthesize(Z3_context ctx, const counter_example_t *counter_examples, int num_cex,
-                const int patterns[][NUM_NODES], protocol_t *protocol, timing_t *timing) {
+                const int *patterns, protocol_t *protocol, timing_t *timing) {
     Z3_solver s = Z3_mk_solver(ctx);
     Z3_solver_inc_ref(ctx, s);
     double t_start = now();
 
-    Z3_ast *sm_vars = (Z3_ast *)malloc((size_t)NUM_ROUNDS * NUM_PATTERNS * sizeof(Z3_ast));
+    Z3_ast *sm_vars = (Z3_ast *)malloc((size_t)NUM_ROUNDS * g_num_patterns * sizeof(Z3_ast));
     Z3_sort int_sort = Z3_mk_int_sort(ctx);
     Z3_ast zero = Z3_mk_int(ctx, 0, int_sort);
     Z3_ast one = Z3_mk_int(ctx, 1, int_sort);
 
     double t0 = now();
     for (int r = 0; r < NUM_ROUNDS; r++) {
-        for (int p = 0; p < NUM_PATTERNS; p++) {
+        for (int p = 0; p < g_num_patterns; p++) {
             char name[64];
             snprintf(name, sizeof(name), "SM_R%d_P%d", r + 1, p);
-            sm_vars[r * NUM_PATTERNS + p] = Z3_mk_const(ctx, Z3_mk_string_symbol(ctx, name), int_sort);
+            sm_vars[r * g_num_patterns + p] = Z3_mk_const(ctx, Z3_mk_string_symbol(ctx, name), int_sort);
             Z3_ast or_args[2] = {
-                Z3_mk_eq(ctx, sm_vars[r * NUM_PATTERNS + p], zero),
-                Z3_mk_eq(ctx, sm_vars[r * NUM_PATTERNS + p], one)
+                Z3_mk_eq(ctx, sm_vars[r * g_num_patterns + p], zero),
+                Z3_mk_eq(ctx, sm_vars[r * g_num_patterns + p], one)
             };
             Z3_solver_assert(ctx, s, Z3_mk_or(ctx, 2, or_args));
         }
@@ -93,12 +93,12 @@ bool synthesize(Z3_context ctx, const counter_example_t *counter_examples, int n
     Z3_model_inc_ref(ctx, m);
     double t_model_start = now();
     for (int r = 0; r < NUM_ROUNDS; r++) {
-        for (int p = 0; p < NUM_PATTERNS; p++) {
+        for (int p = 0; p < g_num_patterns; p++) {
             Z3_ast val;
-            if (!Z3_model_eval(ctx, m, sm_vars[r * NUM_PATTERNS + p], 1, &val)) continue;
+            if (!Z3_model_eval(ctx, m, sm_vars[r * g_num_patterns + p], 1, &val)) continue;
             int n;
             if (Z3_get_numeral_int(ctx, val, &n))
-                protocol->sm[r][p] = n;
+                protocol->sm[r * g_num_patterns + p] = n;
         }
     }
     double t_model = now() - t_model_start;

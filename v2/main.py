@@ -1,6 +1,6 @@
 """
-========== Part 5: CEGIS 主循环与 I/O ==========
-初始反例、循环、成功时输出与保存。若只改「成功时保存格式」或「初始反例」，改本文件对应块即可。
+========== Part 5: CEGIS main loop and I/O ==========
+Initial counterexample, loop, output and save on success. To change save format or initial cex, edit the corresponding block in this file.
 """
 import time
 from synthesizer import Synthesizer
@@ -12,7 +12,7 @@ def main():
     syn = Synthesizer()
     ver = Verifier()
 
-    # ---------- 5.1 初始反例（可改：换问题就换第一个反例） ----------
+    # ---------- 5.1 Initial counterexample (change this to change the problem) ----------
     init_ce = [0] * NUM_NODES
     crash_send_ce = [[False] * NUM_NODES for _ in range(NUM_ROUNDS)]
     crash_after_ce = [[False] * NUM_NODES for _ in range(NUM_ROUNDS)]
@@ -23,7 +23,7 @@ def main():
     tot_synth = {"gen": 0.0, "solve": 0.0, "model": 0.0, "total": 0.0}
     tot_verify = {"gen": 0.0, "solve": 0.0, "model": 0.0, "total": 0.0}
 
-    # ---------- 5.2 CEGIS 循环：合成 -> 验证 -> 有反例则加入再合成 ----------
+    # ---------- 5.2 CEGIS loop: synthesize -> verify -> if cex found add it and repeat ----------
     while True:
         iteration += 1
         print(f"\n=== CEGIS Iteration {iteration} ===")
@@ -49,7 +49,7 @@ def main():
         print(f"  [time] Verify total: {t_verify['total']:.2f}s")
 
         if result is None:
-            # ---------- 5.3 成功：打印协议并保存（可改：换输出格式或文件名） ----------
+            # ---------- 5.3 Success: print and save protocol (change output format or filename here) ----------
             print("\nSUCCESS! Valid Distributed Protocol Synthesized.")
             print("=" * 60)
             print("generated protocol (SM table): input pattern (node0, node1, ...) -> output 0/1")

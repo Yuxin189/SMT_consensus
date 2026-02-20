@@ -1,6 +1,6 @@
 """
-========== Part 3: 合成器 ==========
-根据当前反例集合求一个候选 SM 表。若换一种「正确性」定义（例如别的 consensus 条件），只改「3.2 正确性约束」块。
+========== Part 3: Synthesizer ==========
+Find a candidate SM table from current counterexamples. To change correctness (e.g. different consensus conditions), edit block 3.2 only.
 """
 import time
 from z3 import *
@@ -23,7 +23,7 @@ class Synthesizer:
         s = Solver()
         t_start = time.perf_counter()
 
-        # ---------- 3.1 协议变量：每轮每 pattern 一个 0/1（SM 表） ----------
+        # ---------- 3.1 Protocol variables: one 0/1 per round per pattern (SM table) ----------
         t0 = time.perf_counter()
         sm_vars = []
         for r in range(NUM_ROUNDS):
@@ -35,7 +35,7 @@ class Synthesizer:
             sm_vars.append(round_vars)
         t_vars = time.perf_counter() - t0
 
-        # ---------- 3.2 对每个反例：执行迹 + 正确性约束 ----------
+        # ---------- 3.2 Per counterexample: execution trace + correctness constraints ----------
         t0 = time.perf_counter()
         for idx, (c_init, c_crash_send, c_crash_after, c_loss) in enumerate(counter_examples):
             alive_ce = compute_alive_from_crash_after(c_crash_after)
@@ -44,7 +44,7 @@ class Synthesizer:
             # Deciders: alive at start of last round
             deciders = [alive_ce[NUM_ROUNDS - 1][i] for i in range(NUM_NODES)]
 
-            # ----- 正确性约束：Agreement（存活者一致）+ Validity（全 0 出 0，全 1 出 1） -----
+            # ----- Correctness: Agreement (survivors agree) + Validity (all-0 -> 0, all-1 -> 1) -----
             for i in range(NUM_NODES):
                 for j in range(i + 1, NUM_NODES):
                     s.add(Implies(And(deciders[i], deciders[j]), S[NUM_ROUNDS][i] == S[NUM_ROUNDS][j]))
