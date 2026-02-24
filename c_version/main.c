@@ -38,7 +38,9 @@ int main(void) {
 
     int iteration = 0;
     double tot_synth_gen = 0, tot_synth_solve = 0, tot_synth_model = 0, tot_synth_total = 0;
+    double tot_synth_vars_mk = 0, tot_synth_vars_add = 0, tot_synth_trace = 0, tot_synth_agree = 0;
     double tot_verify_gen = 0, tot_verify_solve = 0, tot_verify_model = 0, tot_verify_total = 0;
+    double tot_verify_env = 0, tot_verify_loss = 0, tot_verify_trace = 0, tot_verify_violation = 0;
 
     for (;;) {
         iteration++;
@@ -62,12 +64,22 @@ int main(void) {
             free(candidate.sm);
             Z3_del_context(ctx);
             printf("ERROR: Impossible to synthesize logic for these constraints.\n");
+            printf("\n[total] %d iterations\n", iteration);
+            printf("  Synthesize: vars_mk=%.3fs vars_add=%.3fs trace=%.3fs agree_validity=%.3fs gen=%.3fs solve=%.3fs model=%.3fs total=%.3fs\n",
+                   tot_synth_vars_mk, tot_synth_vars_add, tot_synth_trace, tot_synth_agree, tot_synth_gen, tot_synth_solve, tot_synth_model, tot_synth_total);
+            printf("  Verify:    env=%.3fs loss=%.3fs trace=%.3fs violation=%.3fs gen=%.3fs solve=%.3fs model=%.3fs total=%.3fs\n",
+                   tot_verify_env, tot_verify_loss, tot_verify_trace, tot_verify_violation, tot_verify_gen, tot_verify_solve, tot_verify_model, tot_verify_total);
+            printf("  Grand total: %.3fs\n", tot_synth_total + tot_verify_total);
             break;
         }
         tot_synth_gen += t_synth.gen;
         tot_synth_solve += t_synth.solve;
         tot_synth_model += t_synth.model;
         tot_synth_total += t_synth.total;
+        tot_synth_vars_mk += t_synth.vars_mk;
+        tot_synth_vars_add += t_synth.vars_add;
+        tot_synth_trace += t_synth.trace;
+        tot_synth_agree += t_synth.agree_validity;
         printf("  [time] Synthesize total: %.3fs\n", t_synth.total);
         printf("Candidate Generated.\n");
 
@@ -111,10 +123,10 @@ int main(void) {
 
             free(candidate.sm);
             printf("\n[total] %d iterations\n", iteration);
-            printf("  Synthesize: gen=%.3fs solve=%.3fs model=%.3fs total=%.3fs\n",
-                   tot_synth_gen, tot_synth_solve, tot_synth_model, tot_synth_total);
-            printf("  Verify:    gen=%.3fs solve=%.3fs model=%.3fs total=%.3fs\n",
-                   tot_verify_gen, tot_verify_solve, tot_verify_model, tot_verify_total);
+            printf("  Synthesize: vars_mk=%.3fs vars_add=%.3fs trace=%.3fs agree_validity=%.3fs gen=%.3fs solve=%.3fs model=%.3fs total=%.3fs\n",
+                   tot_synth_vars_mk, tot_synth_vars_add, tot_synth_trace, tot_synth_agree, tot_synth_gen, tot_synth_solve, tot_synth_model, tot_synth_total);
+            printf("  Verify:    env=%.3fs loss=%.3fs trace=%.3fs violation=%.3fs gen=%.3fs solve=%.3fs model=%.3fs total=%.3fs\n",
+                   tot_verify_env, tot_verify_loss, tot_verify_trace, tot_verify_violation, tot_verify_gen, tot_verify_solve, tot_verify_model, tot_verify_total);
             printf("  Grand total: %.3fs\n", tot_synth_total + tot_verify_total);
             break;  /* ctx already deleted above */
         }
@@ -130,6 +142,10 @@ int main(void) {
         tot_verify_solve += t_verify.solve;
         tot_verify_model += t_verify.model;
         tot_verify_total += t_verify.total;
+        tot_verify_env += t_verify.env;
+        tot_verify_loss += t_verify.loss;
+        tot_verify_trace += t_verify.trace;
+        tot_verify_violation += t_verify.violation;
         printf("  [time] Verify total: %.3fs\n", t_verify.total);
         printf("FAILED. Counter-example found (Crash scenario). Adding to set.\n");
 

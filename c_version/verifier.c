@@ -21,10 +21,12 @@ int verify(Z3_context ctx, const protocol_t *protocol, const int *patterns,
     Z3_solver s = Z3_mk_solver(ctx);
     Z3_solver_inc_ref(ctx, s);
     double t_start = now();
+    double t0;
 
     Z3_sort int_sort = Z3_mk_int_sort(ctx);
     Z3_sort bool_sort = Z3_mk_bool_sort(ctx);
 
+    t0 = now();
     Z3_ast Init[NUM_NODES];
     for (int i = 0; i < NUM_NODES; i++) {
         char name[32];
@@ -73,7 +75,9 @@ int verify(Z3_context ctx, const protocol_t *protocol, const int *patterns,
         for (int i = 0; i < NUM_NODES; i++)
             Z3_solver_assert(ctx, s, Z3_mk_implies(ctx, CrashSend[r][i], CrashAfter[r][i]));
     }
+    double t_env = now() - t0;
 
+    t0 = now();
     Z3_ast Loss[NUM_ROUNDS][NUM_NODES][NUM_NODES];
     for (int r = 0; r < NUM_ROUNDS; r++) {
         for (int src = 0; src < NUM_NODES; src++) {
@@ -106,9 +110,14 @@ int verify(Z3_context ctx, const protocol_t *protocol, const int *patterns,
         for (int i = 0; i < NUM_NODES; i++)
             Z3_solver_assert(ctx, s, Z3_mk_implies(ctx, Alive[r][i], Z3_mk_eq(ctx, Loss[r][i][i], Z3_mk_true(ctx))));
     }
+    double t_loss = now() - t0;
 
+    t0 = now();
     Z3_ast S[NUM_ROUNDS + 1][NUM_NODES];
     build_trace_symbolic(ctx, s, protocol->sm, Init, Alive, Loss, patterns, "verify", S);
+    double t_trace = now() - t0;
+
+    t0 = now();
 
     int nviol = 0;
     int max_viol = NUM_NODES * (NUM_NODES - 1) / 2 + NUM_NODES * 2;
@@ -142,6 +151,7 @@ int verify(Z3_context ctx, const protocol_t *protocol, const int *patterns,
         survivors[i] = Alive[NUM_ROUNDS][i];
     Z3_solver_assert(ctx, s, Z3_mk_or(ctx, NUM_NODES, survivors));
     free(violations);
+    double t_violation = now() - t0;
 
     double t_gen = now() - t_start;   /* time to build formula (env + loss + trace + violations) */
     double t_before_solve = now();
@@ -154,6 +164,10 @@ int verify(Z3_context ctx, const protocol_t *protocol, const int *patterns,
         timing->solve = t_solve;
         timing->model = 0;
         timing->total = now() - t_start;
+        timing->env = t_env;
+        timing->loss = t_loss;
+        timing->trace = t_trace;
+        timing->violation = t_violation;
         Z3_solver_dec_ref(ctx, s);
         return 2; /* verified */
     }
@@ -162,6 +176,10 @@ int verify(Z3_context ctx, const protocol_t *protocol, const int *patterns,
         timing->solve = t_solve;
         timing->model = 0;
         timing->total = now() - t_start;
+        timing->env = t_env;
+        timing->loss = t_loss;
+        timing->trace = t_trace;
+        timing->violation = t_violation;
         Z3_solver_dec_ref(ctx, s);
         return 0; /* unknown, e.g. interrupted */
     }
@@ -196,5 +214,9 @@ int verify(Z3_context ctx, const protocol_t *protocol, const int *patterns,
     timing->solve = t_solve;
     timing->model = t_model;
     timing->total = now() - t_start;
+    timing->env = t_env;
+    timing->loss = t_loss;
+    timing->trace = t_trace;
+    timing->violation = t_violation;
     return 1; /* sat = cex found */
 }

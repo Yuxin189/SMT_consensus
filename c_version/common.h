@@ -25,6 +25,15 @@ typedef struct {
     double solve;
     double model;
     double total;
+    /* Synthesizer breakdown (others zero when from verify) */
+    double vars_mk;
+    double vars_add;
+    double trace;
+    double agree_validity;
+    /* Verifier breakdown (others zero when from synthesize) */
+    double env;
+    double loss;
+    double violation;
 } timing_t;
 
 /* Generate INPUT_PATTERNS like Python itertools.product([0,1,2], repeat=NUM_NODES); row-major patterns[p*NUM_NODES+k]; g_num_patterns must be set first */
