@@ -1,7 +1,5 @@
 # CEGIS v2 — Code layout by parts
 
-Code is split into **parts**. To **verify different cases or protocols**, change only the corresponding part; leave the rest unchanged.
-
 | Part | File | Role | When to edit |
 |------|------|------|--------------|
 | **Part 1** | `config.py` | Global parameters (nodes, rounds, input patterns) | Change node count (3/4/5), rounds, or message values |

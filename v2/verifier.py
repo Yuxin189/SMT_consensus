@@ -111,14 +111,16 @@ class Verifier:
                     for src in range(NUM_NODES)] for r in range(NUM_ROUNDS)]
             t_model = time.perf_counter() - t0
             t_total = time.perf_counter() - t_total_start
-            timing = {"gen": t_gen, "solve": t_solve, "model": t_model, "total": t_total}
+            timing = {"gen": t_gen, "solve": t_solve, "model": t_model, "total": t_total,
+                      "env": t_env, "loss": t_loss, "trace": t_trace, "violation": t_violation}
             print(
                 f"[Verifier][time] gen_constraints={t_gen:.2f}s, z3_solve={t_solve:.2f}s, model={t_model:.2f}s, total={t_total:.2f}s"
             )
             return (c_init, c_crash_send, c_crash_after, c_loss), timing
         else:
             t_total = time.perf_counter() - t_total_start
-            timing = {"gen": t_gen, "solve": t_solve, "model": 0.0, "total": t_total}
+            timing = {"gen": t_gen, "solve": t_solve, "model": 0.0, "total": t_total,
+                      "env": t_env, "loss": t_loss, "trace": t_trace, "violation": t_violation}
             print(
                 f"[Verifier][time] gen_constraints={t_gen:.2f}s, z3_solve={t_solve:.2f}s, total={t_total:.2f}s"
             )

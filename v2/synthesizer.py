@@ -30,21 +30,30 @@ class Synthesizer:
             round_vars = []
             for p in range(len(INPUT_PATTERNS)):
                 v = Int(f"SM_R{r+1}_P{p}")
-                s.add(Or(v == 0, v == 1))
                 round_vars.append(v)
             sm_vars.append(round_vars)
-        t_vars = time.perf_counter() - t0
+        t_vars_mk = time.perf_counter() - t0
+        t0 = time.perf_counter()
+        for r in range(NUM_ROUNDS):
+            for p in range(len(INPUT_PATTERNS)):
+                s.add(Or(sm_vars[r][p] == 0, sm_vars[r][p] == 1))
+        t_vars_add = time.perf_counter() - t0
+        t_vars = t_vars_mk + t_vars_add
 
         # ---------- 3.2 Per counterexample: execution trace + correctness constraints ----------
-        t0 = time.perf_counter()
+        t_trace = 0.0
+        t_agree = 0.0
         for idx, (c_init, c_crash_send, c_crash_after, c_loss) in enumerate(counter_examples):
             alive_ce = compute_alive_from_crash_after(c_crash_after)
+            t0 = time.perf_counter()
             S = build_execution_trace(s, sm_vars, c_init, alive_ce, c_loss, trace_name_suffix=f"ce{idx}")
+            t_trace += time.perf_counter() - t0
 
             # Deciders: alive at start of last round
             deciders = [alive_ce[NUM_ROUNDS - 1][i] for i in range(NUM_NODES)]
 
             # ----- Correctness: Agreement (survivors agree) + Validity (all-0 -> 0, all-1 -> 1) -----
+            t0 = time.perf_counter()
             for i in range(NUM_NODES):
                 for j in range(i + 1, NUM_NODES):
                     s.add(Implies(And(deciders[i], deciders[j]), S[NUM_ROUNDS][i] == S[NUM_ROUNDS][j]))
@@ -55,7 +64,8 @@ class Synthesizer:
             if all(v == 1 for v in c_init):
                 for i in range(NUM_NODES):
                     s.add(Implies(deciders[i], S[NUM_ROUNDS][i] == 1))
-        t_cex = time.perf_counter() - t0
+            t_agree += time.perf_counter() - t0
+        t_cex = t_trace + t_agree
 
         t0 = time.perf_counter()
         if s.check() == sat:
@@ -69,13 +79,15 @@ class Synthesizer:
             t_model = time.perf_counter() - t0
             t_total = time.perf_counter() - t_start
             t_gen = t_vars + t_cex
-            timing = {"gen": t_gen, "solve": t_solve, "model": t_model, "total": t_total}
-            print(f"[Synthesizer][time] gen_constraints={t_gen:.2f}s, z3_solve={t_solve:.2f}s, model={t_model:.2f}s, total={t_total:.2f}s")
+            timing = {"gen": t_gen, "solve": t_solve, "model": t_model, "total": t_total,
+                      "vars_mk": t_vars_mk, "vars_add": t_vars_add, "trace": t_trace, "agree_validity": t_agree}
+            print(f"[Synthesizer][time] gen: vars_mk={t_vars_mk:.3f}s vars_add={t_vars_add:.3f}s trace={t_trace:.3f}s agree_validity={t_agree:.3f}s total_gen={t_gen:.2f}s | solve={t_solve:.2f}s model={t_model:.2f}s total={t_total:.2f}s")
             return concrete_sm, timing
         else:
             t_solve = time.perf_counter() - t0
             t_total = time.perf_counter() - t_start
             t_gen = t_vars + t_cex
-            timing = {"gen": t_gen, "solve": t_solve, "model": 0.0, "total": t_total}
-            print(f"[Synthesizer][time] gen_constraints={t_gen:.2f}s, z3_solve={t_solve:.2f}s, total={t_total:.2f}s")
+            timing = {"gen": t_gen, "solve": t_solve, "model": 0.0, "total": t_total,
+                      "vars_mk": t_vars_mk, "vars_add": t_vars_add, "trace": t_trace, "agree_validity": t_agree}
+            print(f"[Synthesizer][time] gen: vars_mk={t_vars_mk:.3f}s vars_add={t_vars_add:.3f}s trace={t_trace:.3f}s agree_validity={t_agree:.3f}s total_gen={t_gen:.2f}s | solve={t_solve:.2f}s total={t_total:.2f}s")
             return None, timing

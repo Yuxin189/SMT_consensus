@@ -20,8 +20,10 @@ def main():
     counter_examples = [(init_ce, crash_send_ce, crash_after_ce, loss_ce)]
 
     iteration = 0
-    tot_synth = {"gen": 0.0, "solve": 0.0, "model": 0.0, "total": 0.0}
-    tot_verify = {"gen": 0.0, "solve": 0.0, "model": 0.0, "total": 0.0}
+    tot_synth = {"gen": 0.0, "solve": 0.0, "model": 0.0, "total": 0.0,
+                 "vars_mk": 0.0, "vars_add": 0.0, "trace": 0.0, "agree_validity": 0.0}
+    tot_verify = {"gen": 0.0, "solve": 0.0, "model": 0.0, "total": 0.0,
+                  "env": 0.0, "loss": 0.0, "trace": 0.0, "violation": 0.0}
 
     # ---------- 5.2 CEGIS loop: synthesize -> verify -> if cex found add it and repeat ----------
     while True:
@@ -29,23 +31,25 @@ def main():
         print(f"\n=== CEGIS Iteration {iteration} ===")
 
         candidate_sm, t_synth = syn.synthesize(counter_examples)
-        for k in tot_synth:
-            tot_synth[k] += t_synth[k]
+        for k in t_synth:
+            if k in tot_synth:
+                tot_synth[k] += t_synth[k]
         print(f"  [time] Synthesize total: {t_synth['total']:.2f}s")
 
         if candidate_sm is None:
             print("ERROR: Impossible to synthesize logic for these constraints.")
             print(f"\n[total] {iteration} iterations")
-            print(f"  Synthesize: gen={tot_synth['gen']:.2f}s solve={tot_synth['solve']:.2f}s model={tot_synth['model']:.2f}s total={tot_synth['total']:.2f}s")
-            print(f"  Verify:    gen={tot_verify['gen']:.2f}s solve={tot_verify['solve']:.2f}s model={tot_verify['model']:.2f}s total={tot_verify['total']:.2f}s")
+            print(f"  Synthesize: vars_mk={tot_synth['vars_mk']:.2f}s vars_add={tot_synth['vars_add']:.2f}s trace={tot_synth['trace']:.2f}s agree_validity={tot_synth['agree_validity']:.2f}s gen={tot_synth['gen']:.2f}s solve={tot_synth['solve']:.2f}s model={tot_synth['model']:.2f}s total={tot_synth['total']:.2f}s")
+            print(f"  Verify:    env={tot_verify['env']:.2f}s loss={tot_verify['loss']:.2f}s trace={tot_verify['trace']:.2f}s violation={tot_verify['violation']:.2f}s gen={tot_verify['gen']:.2f}s solve={tot_verify['solve']:.2f}s model={tot_verify['model']:.2f}s total={tot_verify['total']:.2f}s")
             print(f"  Grand total: {tot_synth['total'] + tot_verify['total']:.2f}s")
             break
 
         print("Candidate Generated.")
 
         result, t_verify = ver.verify(candidate_sm)
-        for k in tot_verify:
-            tot_verify[k] += t_verify[k]
+        for k in t_verify:
+            if k in tot_verify:
+                tot_verify[k] += t_verify[k]
         print(f"  [time] Verify total: {t_verify['total']:.2f}s")
 
         if result is None:
@@ -69,8 +73,8 @@ def main():
                 f.write("\nINPUT_PATTERNS = " + repr(list(INPUT_PATTERNS)) + "\n")
             print("protocol saved to generated_protocol_v2.py")
             print(f"\n[total] {iteration} iterations")
-            print(f"  Synthesize: gen={tot_synth['gen']:.2f}s solve={tot_synth['solve']:.2f}s model={tot_synth['model']:.2f}s total={tot_synth['total']:.2f}s")
-            print(f"  Verify:    gen={tot_verify['gen']:.2f}s solve={tot_verify['solve']:.2f}s model={tot_verify['model']:.2f}s total={tot_verify['total']:.2f}s")
+            print(f"  Synthesize: vars_mk={tot_synth['vars_mk']:.2f}s vars_add={tot_synth['vars_add']:.2f}s trace={tot_synth['trace']:.2f}s agree_validity={tot_synth['agree_validity']:.2f}s gen={tot_synth['gen']:.2f}s solve={tot_synth['solve']:.2f}s model={tot_synth['model']:.2f}s total={tot_synth['total']:.2f}s")
+            print(f"  Verify:    env={tot_verify['env']:.2f}s loss={tot_verify['loss']:.2f}s trace={tot_verify['trace']:.2f}s violation={tot_verify['violation']:.2f}s gen={tot_verify['gen']:.2f}s solve={tot_verify['solve']:.2f}s model={tot_verify['model']:.2f}s total={tot_verify['total']:.2f}s")
             print(f"  Grand total: {tot_synth['total'] + tot_verify['total']:.2f}s")
             break
         else:
