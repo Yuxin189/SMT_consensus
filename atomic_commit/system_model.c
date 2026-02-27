@@ -27,7 +27,7 @@ void build_trace_concrete(Z3_context ctx, Z3_solver s, Z3_ast *sm_vars,
                           const bool loss[NUM_ROUNDS][NUM_NODES][NUM_NODES],
                           const int *patterns, const char *suffix,
                           Z3_ast S[NUM_ROUNDS + 1][NUM_NODES]) {
-    Z3_ast two = mk_int(ctx, 2);
+    Z3_ast missing = mk_int(ctx, STATE_MISSING);
     for (int i = 0; i < NUM_NODES; i++) {
         char name[128];
         snprintf(name, sizeof(name), "S_r0_n%d_%s", i, suffix);
@@ -40,10 +40,10 @@ void build_trace_concrete(Z3_context ctx, Z3_solver s, Z3_ast *sm_vars,
             Z3_ast recv_vec[NUM_NODES];
             for (int sender = 0; sender < NUM_NODES; sender++) {
                 if (sender == i) {
-                    recv_vec[sender] = alive[r1][i] ? S[r1][i] : two;
+                    recv_vec[sender] = alive[r1][i] ? S[r1][i] : missing;
                 } else {
                     int delivered = alive[r1][sender] && loss[r1][sender][i];
-                    recv_vec[sender] = delivered ? S[r1][sender] : two;
+                    recv_vec[sender] = delivered ? S[r1][sender] : missing;
                 }
             }
             Z3_ast *round_rules = sm_vars + r1 * g_num_patterns;
@@ -63,7 +63,7 @@ void build_trace_symbolic(Z3_context ctx, Z3_solver s, const int *sm_logic,
                           const int *patterns, const char *suffix,
                           Z3_ast S[NUM_ROUNDS + 1][NUM_NODES]) {
     Z3_sort int_sort = Z3_mk_int_sort(ctx);
-    Z3_ast two = mk_int(ctx, 2);
+    Z3_ast missing = mk_int(ctx, STATE_MISSING);
     for (int i = 0; i < NUM_NODES; i++) {
         char name[128];
         snprintf(name, sizeof(name), "S_r0_n%d_%s", i, suffix);
@@ -76,10 +76,10 @@ void build_trace_symbolic(Z3_context ctx, Z3_solver s, const int *sm_logic,
             Z3_ast recv_vec[NUM_NODES];
             for (int sender = 0; sender < NUM_NODES; sender++) {
                 if (sender == i) {
-                    recv_vec[sender] = Z3_mk_ite(ctx, Alive[r1][i], S[r1][i], two);
+                    recv_vec[sender] = Z3_mk_ite(ctx, Alive[r1][i], S[r1][i], missing);
                 } else {
                     Z3_ast delivered = Z3_mk_and(ctx, 2, (Z3_ast[]){Alive[r1][sender], Loss[r1][sender][i]});
-                    recv_vec[sender] = Z3_mk_ite(ctx, delivered, S[r1][sender], two);
+                    recv_vec[sender] = Z3_mk_ite(ctx, delivered, S[r1][sender], missing);
                 }
             }
             Z3_ast *round_rules = (Z3_ast *)malloc((size_t)g_num_patterns * sizeof(Z3_ast));

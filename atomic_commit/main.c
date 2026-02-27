@@ -12,7 +12,7 @@
 
 int main(void) {
     g_num_patterns = 1;
-    for (int i = 0; i < NUM_NODES; i++) g_num_patterns *= 3;
+    for (int i = 0; i < NUM_NODES; i++) g_num_patterns *= 5;
 
     int *patterns = (int *)malloc((size_t)g_num_patterns * NUM_NODES * sizeof(int));
     gen_input_patterns(patterns);
@@ -87,7 +87,7 @@ int main(void) {
             Z3_del_context(ctx);
             printf("\nSUCCESS! Valid Atomic Commit Protocol Synthesized.\n");
             printf("============================================================\n");
-            printf("generated protocol (SM table): 0=abort, 1=commit, 2=missing\n");
+            printf("generated protocol (SM table): 0=Abort, 1=Commit, 2=DoNothing_Zero, 3=DoNothing_One\n");
             printf("============================================================\n");
             for (int r = 0; r < NUM_ROUNDS; r++) {
                 printf("\nRound %d Rules:\n", r + 1);

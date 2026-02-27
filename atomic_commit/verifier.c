@@ -118,38 +118,73 @@ int verify(Z3_context ctx, const protocol_t *protocol, const int *patterns,
     double t_trace = now() - t0;
 
     t0 = now();
-    /* Violations: agreement + validity (Atomic Commit) */
+    /* Violations: Rule 3 agreement + Rule 5 any_abort + Rule 4 all_commit+no_crash */
     int nviol = 0;
     int max_viol = NUM_NODES * (NUM_NODES - 1) / 2 + NUM_NODES * 2;
     Z3_ast *violations = (Z3_ast *)malloc((size_t)max_viol * sizeof(Z3_ast));
+    /* Rule 3: two uncrashed nodes disagree */
     for (int i = 0; i < NUM_NODES; i++) {
         for (int j = i + 1; j < NUM_NODES; j++) {
             Z3_ast args[3] = {
-                Alive[NUM_ROUNDS - 1][i],
-                Alive[NUM_ROUNDS - 1][j],
+                Alive[NUM_ROUNDS][i],
+                Alive[NUM_ROUNDS][j],
                 Z3_mk_not(ctx, Z3_mk_eq(ctx, S[NUM_ROUNDS][i], S[NUM_ROUNDS][j]))
             };
             violations[nviol++] = Z3_mk_and(ctx, 3, args);
         }
     }
-    Z3_ast all_abort = Z3_mk_true(ctx);
-    Z3_ast all_commit = Z3_mk_true(ctx);
+    /* Rule 5: any abort -> all must abort; violation = any_abort but some decided commit */
+    Z3_ast any_abort = Z3_mk_false(ctx);
     for (int i = 0; i < NUM_NODES; i++) {
-        all_abort = Z3_mk_and(ctx, 2, (Z3_ast[]){all_abort, Z3_mk_eq(ctx, Init[i], Z3_mk_int(ctx, 0, int_sort))});
-        all_commit = Z3_mk_and(ctx, 2, (Z3_ast[]){all_commit, Z3_mk_eq(ctx, Init[i], Z3_mk_int(ctx, 1, int_sort))});
+        any_abort = Z3_mk_or(ctx, 2, (Z3_ast[]){any_abort, Z3_mk_eq(ctx, Init[i], Z3_mk_int(ctx, 0, int_sort))});
     }
     for (int i = 0; i < NUM_NODES; i++) {
-        Z3_ast dec_i = Alive[NUM_ROUNDS - 1][i];
-        Z3_ast args0[3] = {all_abort, dec_i, Z3_mk_not(ctx, Z3_mk_eq(ctx, S[NUM_ROUNDS][i], Z3_mk_int(ctx, 0, int_sort)))};
-        violations[nviol++] = Z3_mk_and(ctx, 3, args0);
-        Z3_ast args1[3] = {all_commit, dec_i, Z3_mk_not(ctx, Z3_mk_eq(ctx, S[NUM_ROUNDS][i], Z3_mk_int(ctx, 1, int_sort)))};
-        violations[nviol++] = Z3_mk_and(ctx, 3, args1);
+        Z3_ast args[3] = {
+            any_abort,
+            Alive[NUM_ROUNDS][i],
+            Z3_mk_not(ctx, Z3_mk_eq(ctx, S[NUM_ROUNDS][i], Z3_mk_int(ctx, 0, int_sort)))
+        };
+        violations[nviol++] = Z3_mk_and(ctx, 3, args);
+    }
+    /* Rule 4: all commit + no crash -> all commit; violation = that holds but some decided abort */
+    Z3_ast all_commit = Z3_mk_true(ctx);
+    Z3_ast no_crash = Z3_mk_true(ctx);
+    for (int i = 0; i < NUM_NODES; i++) {
+        all_commit = Z3_mk_and(ctx, 2, (Z3_ast[]){all_commit, Z3_mk_eq(ctx, Init[i], Z3_mk_int(ctx, 1, int_sort))});
+        no_crash = Z3_mk_and(ctx, 2, (Z3_ast[]){no_crash, Alive[NUM_ROUNDS][i]});
+    }
+    for (int i = 0; i < NUM_NODES; i++) {
+        Z3_ast args[3] = {
+            all_commit,
+            no_crash,
+            Z3_mk_not(ctx, Z3_mk_eq(ctx, S[NUM_ROUNDS][i], Z3_mk_int(ctx, 1, int_sort)))
+        };
+        violations[nviol++] = Z3_mk_and(ctx, 3, args);
     }
     Z3_solver_assert(ctx, s, Z3_mk_or(ctx, nviol, violations));
-    Z3_ast survivors[NUM_NODES];
-    for (int i = 0; i < NUM_NODES; i++)
-        survivors[i] = Alive[NUM_ROUNDS][i];
-    Z3_solver_assert(ctx, s, Z3_mk_or(ctx, NUM_NODES, survivors));
+    /* m rounds can tolerate at most m-1 crashes: at least (NUM_NODES - NUM_ROUNDS + 1) survivors */
+    int min_survivors = NUM_NODES - NUM_ROUNDS + 1;
+    if (min_survivors < 1) min_survivors = 1;
+    /* For "at least k survivors": every subset of size (N-k+1) must have at least one alive */
+    int subset_size = NUM_NODES - min_survivors + 1;
+    if (subset_size > 0 && subset_size <= NUM_NODES) {
+        /* Enumerate subsets of size subset_size; for each, assert OR of Alive[i] */
+        int idx[16];  /* max subset size */
+        if (subset_size <= 16) {
+            for (int i = 0; i < subset_size; i++) idx[i] = i;
+            while (1) {
+                Z3_ast or_alive[16];
+                for (int i = 0; i < subset_size; i++)
+                    or_alive[i] = Alive[NUM_ROUNDS][idx[i]];
+                Z3_solver_assert(ctx, s, Z3_mk_or(ctx, subset_size, or_alive));
+                int j = subset_size - 1;
+                while (j >= 0 && idx[j] >= NUM_NODES - subset_size + j) j--;
+                if (j < 0) break;
+                idx[j]++;
+                for (int i = j + 1; i < subset_size; i++) idx[i] = idx[i - 1] + 1;
+            }
+        }
+    }
     free(violations);
     double t_violation = now() - t0;
 
