@@ -41,6 +41,8 @@ int main(void) {
     double tot_synth_vars_mk = 0, tot_synth_vars_add = 0, tot_synth_trace = 0, tot_synth_agree = 0;
     double tot_verify_gen = 0, tot_verify_solve = 0, tot_verify_model = 0, tot_verify_total = 0;
     double tot_verify_env = 0, tot_verify_loss = 0, tot_verify_trace = 0, tot_verify_violation = 0;
+    unsigned final_synth_constraints = 0;
+    unsigned final_verify_constraints = 0;
 
     for (;;) {
         iteration++;
@@ -69,6 +71,8 @@ int main(void) {
                    tot_synth_vars_mk, tot_synth_vars_add, tot_synth_trace, tot_synth_agree, tot_synth_gen, tot_synth_solve, tot_synth_model, tot_synth_total);
             printf("  Verify:    env=%.3fs loss=%.3fs trace=%.3fs violation=%.3fs gen=%.3fs solve=%.3fs model=%.3fs total=%.3fs\n",
                    tot_verify_env, tot_verify_loss, tot_verify_trace, tot_verify_violation, tot_verify_gen, tot_verify_solve, tot_verify_model, tot_verify_total);
+            printf("  Final synth constraints: %u\n", final_synth_constraints);
+            printf("  Final verify constraints: %u\n", final_verify_constraints);
             printf("  Grand total: %.3fs\n", tot_synth_total + tot_verify_total);
             break;
         }
@@ -80,6 +84,7 @@ int main(void) {
         tot_synth_vars_add += t_synth.vars_add;
         tot_synth_trace += t_synth.trace;
         tot_synth_agree += t_synth.agree_validity;
+        final_synth_constraints = t_synth.constraints;
         printf("  [time] Synthesize total: %.3fs\n", t_synth.total);
         printf("Candidate Generated.\n");
 
@@ -127,6 +132,8 @@ int main(void) {
                    tot_synth_vars_mk, tot_synth_vars_add, tot_synth_trace, tot_synth_agree, tot_synth_gen, tot_synth_solve, tot_synth_model, tot_synth_total);
             printf("  Verify:    env=%.3fs loss=%.3fs trace=%.3fs violation=%.3fs gen=%.3fs solve=%.3fs model=%.3fs total=%.3fs\n",
                    tot_verify_env, tot_verify_loss, tot_verify_trace, tot_verify_violation, tot_verify_gen, tot_verify_solve, tot_verify_model, tot_verify_total);
+            printf("  Final synth constraints: %u\n", final_synth_constraints);
+            printf("  Final verify constraints: %u\n", final_verify_constraints);
             printf("  Grand total: %.3fs\n", tot_synth_total + tot_verify_total);
             break;  /* ctx already deleted above */
         }
@@ -146,6 +153,7 @@ int main(void) {
         tot_verify_loss += t_verify.loss;
         tot_verify_trace += t_verify.trace;
         tot_verify_violation += t_verify.violation;
+        final_verify_constraints = t_verify.constraints;
         printf("  [time] Verify total: %.3fs\n", t_verify.total);
         printf("FAILED. Counter-example found (Crash scenario). Adding to set.\n");
 

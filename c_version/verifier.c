@@ -153,6 +153,13 @@ int verify(Z3_context ctx, const protocol_t *protocol, const int *patterns,
     free(violations);
     double t_violation = now() - t0;
 
+    Z3_ast_vector assertions = Z3_solver_get_assertions(ctx, s);
+    Z3_ast_vector_inc_ref(ctx, assertions);
+    unsigned num_constraints = Z3_ast_vector_size(ctx, assertions);
+    Z3_ast_vector_dec_ref(ctx, assertions);
+    timing->constraints = num_constraints;
+    printf("  [Verify] total constraints: %u\n", num_constraints);
+
     double t_gen = now() - t_start;   /* time to build formula (env + loss + trace + violations) */
     double t_before_solve = now();
     Z3_lbool result = Z3_solver_check(ctx, s);

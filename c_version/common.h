@@ -25,6 +25,7 @@ typedef struct {
     double solve;
     double model;
     double total;
+    unsigned constraints;
     /* Synthesizer breakdown (others zero when from verify) */
     double vars_mk;
     double vars_add;
