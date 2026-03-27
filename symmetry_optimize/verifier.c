@@ -162,10 +162,10 @@ int verify(Z3_context ctx, const protocol_t *protocol, const int *patterns,
     unsigned long long ast_nodes = count_ast_nodes_in_vector(ctx, assertions);
     double t_ast_count = now() - t_ast_count_start;
     Z3_ast_vector_dec_ref(ctx, assertions);
-    timing->constraints = num_constraints;
     timing->constraints_count = t_constraints_count;
-    timing->ast_nodes = ast_nodes;
     timing->ast_count = t_ast_count;
+    timing->constraints = num_constraints;
+    timing->ast_nodes = ast_nodes;
     printf("  [Verify] total constraints: %u (count_time=%.6fs), ast_nodes=%llu (ast_count=%.6fs)\n",
            num_constraints, t_constraints_count, ast_nodes, t_ast_count);
 

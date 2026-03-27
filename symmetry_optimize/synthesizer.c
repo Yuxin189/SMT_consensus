@@ -20,8 +20,6 @@ bool synthesize(Z3_context ctx, const counter_example_t *counter_examples, int n
     Z3_sort int_sort = Z3_mk_int_sort(ctx);
     Z3_ast zero = Z3_mk_int(ctx, 0, int_sort);
     Z3_ast one = Z3_mk_int(ctx, 1, int_sort);
-    Z3_ast two = Z3_mk_int(ctx, 2, int_sort);
-    Z3_ast three = Z3_mk_int(ctx, 3, int_sort);
 
     double t0 = now();
     for (int r = 0; r < NUM_ROUNDS; r++) {
@@ -35,18 +33,11 @@ bool synthesize(Z3_context ctx, const counter_example_t *counter_examples, int n
     t0 = now();
     for (int r = 0; r < NUM_ROUNDS; r++) {
         for (int p = 0; p < g_num_patterns; p++) {
-            Z3_ast *or_args;
-            if (r == NUM_ROUNDS - 1) {
-                /* Rule 2: last round only - output Abort(0) or Commit(1) */
-                or_args = (Z3_ast[]){Z3_mk_eq(ctx, sm_vars[r * g_num_patterns + p], zero),
-                                     Z3_mk_eq(ctx, sm_vars[r * g_num_patterns + p], one)};
-                Z3_solver_assert(ctx, s, Z3_mk_or(ctx, 2, or_args));
-            } else {
-                /* Rule 2: intermediate rounds - output DoNothing_Zero(2) or DoNothing_One(3) */
-                or_args = (Z3_ast[]){Z3_mk_eq(ctx, sm_vars[r * g_num_patterns + p], two),
-                                     Z3_mk_eq(ctx, sm_vars[r * g_num_patterns + p], three)};
-                Z3_solver_assert(ctx, s, Z3_mk_or(ctx, 2, or_args));
-            }
+            Z3_ast or_args[2] = {
+                Z3_mk_eq(ctx, sm_vars[r * g_num_patterns + p], zero),
+                Z3_mk_eq(ctx, sm_vars[r * g_num_patterns + p], one)
+            };
+            Z3_solver_assert(ctx, s, Z3_mk_or(ctx, 2, or_args));
         }
     }
     double t_vars_add = now() - t0;
@@ -65,42 +56,52 @@ bool synthesize(Z3_context ctx, const counter_example_t *counter_examples, int n
         t_trace += now() - t_trace_i;
 
         double t_agree_i = now();
-        /* Agreement: no simultaneous abort(0) and commit(1) among alive nodes (O(n) instead of O(n^2)) */
+        /* Agreement: no simultaneous 0 and 1 among alive nodes (O(n) instead of O(n^2)) */
         Z3_ast has_zero = Z3_mk_false(ctx);
         Z3_ast has_one = Z3_mk_false(ctx);
         for (int i = 0; i < NUM_NODES; i++) {
-            if (alive[NUM_ROUNDS][i]) {
+            if (alive[NUM_ROUNDS - 1][i]) {
                 has_zero = Z3_mk_or(ctx, 2, (Z3_ast[]){has_zero, Z3_mk_eq(ctx, S[NUM_ROUNDS][i], zero)});
                 has_one = Z3_mk_or(ctx, 2, (Z3_ast[]){has_one, Z3_mk_eq(ctx, S[NUM_ROUNDS][i], one)});
             }
         }
         Z3_solver_assert(ctx, s, Z3_mk_not(ctx, Z3_mk_and(ctx, 2, (Z3_ast[]){has_zero, has_one})));
-        /* Validity (Rule 5): any abort -> all decide abort */
-        int any_abort = 0;
+        int all_zero = 1, all_one = 1;
         for (int i = 0; i < NUM_NODES; i++) {
-            if (ce->init[i] == 0) { any_abort = 1; break; }
+            if (ce->init[i] != 0) all_zero = 0;
+            if (ce->init[i] != 1) all_one = 0;
         }
-        if (any_abort) {
+        if (all_zero) {
             for (int i = 0; i < NUM_NODES; i++) {
-                if (alive[NUM_ROUNDS][i]) {
-                    Z3_solver_assert(ctx, s, Z3_mk_eq(ctx, S[NUM_ROUNDS][i], zero));
-                }
+                Z3_ast dec_i = alive[NUM_ROUNDS - 1][i] ? Z3_mk_true(ctx) : Z3_mk_false(ctx);
+                Z3_solver_assert(ctx, s, Z3_mk_implies(ctx, dec_i, Z3_mk_eq(ctx, S[NUM_ROUNDS][i], zero)));
             }
         }
-        /* Validity (Rule 4): all commit + no crash -> all decide commit */
-        int all_commit = 1, no_crash = 1;
-        for (int i = 0; i < NUM_NODES; i++) {
-            if (ce->init[i] != 1) all_commit = 0;
-            if (!alive[NUM_ROUNDS][i]) no_crash = 0;
-        }
-        if (all_commit && no_crash) {
+        if (all_one) {
             for (int i = 0; i < NUM_NODES; i++) {
-                Z3_solver_assert(ctx, s, Z3_mk_eq(ctx, S[NUM_ROUNDS][i], one));
+                Z3_ast dec_i = alive[NUM_ROUNDS - 1][i] ? Z3_mk_true(ctx) : Z3_mk_false(ctx);
+                Z3_solver_assert(ctx, s, Z3_mk_implies(ctx, dec_i, Z3_mk_eq(ctx, S[NUM_ROUNDS][i], one)));
             }
         }
         t_agree += now() - t_agree_i;
     }
     double t_cex = t_trace + t_agree;
+
+    double t_constraints_count_start = now();
+    Z3_ast_vector assertions = Z3_solver_get_assertions(ctx, s);
+    Z3_ast_vector_inc_ref(ctx, assertions);
+    unsigned num_constraints = Z3_ast_vector_size(ctx, assertions);
+    double t_constraints_count = now() - t_constraints_count_start;
+    double t_ast_count_start = now();
+    unsigned long long ast_nodes = count_ast_nodes_in_vector(ctx, assertions);
+    double t_ast_count = now() - t_ast_count_start;
+    Z3_ast_vector_dec_ref(ctx, assertions);
+    timing->constraints_count = t_constraints_count;
+    timing->ast_count = t_ast_count;
+    timing->constraints = num_constraints;
+    timing->ast_nodes = ast_nodes;
+    printf("  [Synthesize] total constraints: %u (count_time=%.6fs), ast_nodes=%llu (ast_count=%.6fs)\n",
+           num_constraints, t_constraints_count, ast_nodes, t_ast_count);
 
     double t_solve_start = now();
     Z3_lbool result = Z3_solver_check(ctx, s);

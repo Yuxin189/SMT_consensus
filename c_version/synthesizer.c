@@ -56,7 +56,7 @@ bool synthesize(Z3_context ctx, const counter_example_t *counter_examples, int n
         t_trace += now() - t_trace_i;
 
         double t_agree_i = now();
-        /* Agreement: no simultaneous 0 and 1 among alive nodes (O(n) instead of O(n^2)) */
+        /* Agreement: surviving nodes cannot contain both 0 and 1. */
         Z3_ast has_zero = Z3_mk_false(ctx);
         Z3_ast has_one = Z3_mk_false(ctx);
         for (int i = 0; i < NUM_NODES; i++) {
@@ -66,6 +66,17 @@ bool synthesize(Z3_context ctx, const counter_example_t *counter_examples, int n
             }
         }
         Z3_solver_assert(ctx, s, Z3_mk_not(ctx, Z3_mk_and(ctx, 2, (Z3_ast[]){has_zero, has_one})));
+        /* Pairwise version kept for comparison/debugging.
+        for (int i = 0; i < NUM_NODES; i++) {
+            for (int j = i + 1; j < NUM_NODES; j++) {
+                Z3_ast dec_i = alive[NUM_ROUNDS - 1][i] ? Z3_mk_true(ctx) : Z3_mk_false(ctx);
+                Z3_ast dec_j = alive[NUM_ROUNDS - 1][j] ? Z3_mk_true(ctx) : Z3_mk_false(ctx);
+                Z3_ast dec_both = Z3_mk_and(ctx, 2, (Z3_ast[]){dec_i, dec_j});
+                Z3_ast agree = Z3_mk_eq(ctx, S[NUM_ROUNDS][i], S[NUM_ROUNDS][j]);
+                Z3_solver_assert(ctx, s, Z3_mk_implies(ctx, dec_both, agree));
+            }
+        }
+        */
         int all_zero = 1, all_one = 1;
         for (int i = 0; i < NUM_NODES; i++) {
             if (ce->init[i] != 0) all_zero = 0;
@@ -87,12 +98,21 @@ bool synthesize(Z3_context ctx, const counter_example_t *counter_examples, int n
     }
     double t_cex = t_trace + t_agree;
 
+    double t_constraints_count_start = now();
     Z3_ast_vector assertions = Z3_solver_get_assertions(ctx, s);
     Z3_ast_vector_inc_ref(ctx, assertions);
     unsigned num_constraints = Z3_ast_vector_size(ctx, assertions);
+    double t_constraints_count = now() - t_constraints_count_start;
+    double t_ast_count_start = now();
+    unsigned long long ast_nodes = count_ast_nodes_in_vector(ctx, assertions);
+    double t_ast_count = now() - t_ast_count_start;
     Z3_ast_vector_dec_ref(ctx, assertions);
     timing->constraints = num_constraints;
-    printf("  [Synthesize] total constraints: %u\n", num_constraints);
+    timing->constraints_count = t_constraints_count;
+    timing->ast_nodes = ast_nodes;
+    timing->ast_count = t_ast_count;
+    printf("  [Synthesize] total constraints: %u (count_time=%.6fs), ast_nodes=%llu (ast_count=%.6fs)\n",
+           num_constraints, t_constraints_count, ast_nodes, t_ast_count);
 
     double t_solve_start = now();
     Z3_lbool result = Z3_solver_check(ctx, s);

@@ -17,7 +17,6 @@ endif
 
 SRCS = main.c common.c system_model.c synthesizer.c verifier.c
 OBJS = $(SRCS:.c=.o)
-DEPS = $(OBJS:.o=.d)
 TARGET = cegis
 
 .PHONY: all clean run
@@ -28,10 +27,10 @@ $(TARGET): $(OBJS)
 	$(CC) $(OBJS) -o $@ $(LDFLAGS)
 
 %.o: %.c
-	$(CC) $(CFLAGS) -MMD -MP -c $< -o $@
+	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
-	rm -f $(OBJS) $(DEPS) $(TARGET) generated_protocol_c.c
+	rm -f $(OBJS) $(TARGET) generated_protocol_c.c
 
 run: $(TARGET)
 	@Z3LIB=$$(python3 -c "import z3, os; print(os.path.join(os.path.dirname(z3.__file__), 'lib'))" 2>/dev/null); \
@@ -40,5 +39,3 @@ run: $(TARGET)
 	else \
 		./$(TARGET); \
 	fi
-
--include $(DEPS)

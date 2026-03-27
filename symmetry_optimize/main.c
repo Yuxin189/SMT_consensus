@@ -1,7 +1,5 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
-#include <time.h>
 #include <z3.h>
 
 #include "config.h"
@@ -11,74 +9,19 @@
 
 #define MAX_CEX  20000     /* max counterexamples array size */
 #define MAX_ITER 8000      /* max CEGIS iterations */
-#define CEX_PREVIEW_LIMIT 3
-
-static unsigned parse_seed_or_default(const char *seed_str, unsigned fallback) {
-    if (seed_str == NULL || seed_str[0] == '\0') return fallback;
-    char *endptr = NULL;
-    unsigned long v = strtoul(seed_str, &endptr, 10);
-    if (endptr == seed_str || *endptr != '\0') return fallback;
-    return (unsigned)v;
-}
-
-static void print_counter_example_brief(const counter_example_t *ce, int idx) {
-    printf("  [cex %d] init=[", idx);
-    for (int i = 0; i < NUM_NODES; i++)
-        printf("%d%s", ce->init[i], i < NUM_NODES - 1 ? "," : "");
-    printf("]\n");
-
-    for (int r = 0; r < NUM_ROUNDS; r++) {
-        int crash_send_cnt = 0, crash_after_cnt = 0, delivered_cnt = 0, total_links = NUM_NODES * NUM_NODES;
-        for (int i = 0; i < NUM_NODES; i++) {
-            if (ce->crash_send[r][i]) crash_send_cnt++;
-            if (ce->crash_after[r][i]) crash_after_cnt++;
-        }
-        for (int src = 0; src < NUM_NODES; src++) {
-            for (int dst = 0; dst < NUM_NODES; dst++) {
-                if (ce->loss[r][src][dst]) delivered_cnt++;
-            }
-        }
-        printf("    r%d: crash_send=%d crash_after=%d delivered=%d/%d\n",
-               r + 1, crash_send_cnt, crash_after_cnt, delivered_cnt, total_links);
-    }
-}
-
-static void print_counter_examples_preview(const counter_example_t *counter_examples, int num_cex, int limit) {
-    int show = num_cex < limit ? num_cex : limit;
-    printf("[cex_preview] total=%d showing=%d\n", num_cex, show);
-    for (int i = 0; i < show; i++)
-        print_counter_example_brief(&counter_examples[i], i);
-}
 
 int main(void) {
-    /* NUM_PATTERNS = 3^NUM_NODES, works for any NUM_NODES */
-    g_num_patterns = 1;
-    for (int i = 0; i < NUM_NODES; i++) g_num_patterns *= 3;
+    /* Canonical pattern count = number of (count0, count1) pairs. */
+    g_num_patterns = get_num_canonical_patterns();
 
-    int *patterns = (int *)malloc((size_t)g_num_patterns * NUM_NODES * sizeof(int));
+    int *patterns = (int *)malloc((size_t)g_num_patterns * 2 * sizeof(int));
     gen_input_patterns(patterns);
 
     counter_example_t *counter_examples = (counter_example_t *)malloc((size_t)MAX_CEX * sizeof(counter_example_t));
     int num_cex = 1;
 
-    /*
-     * Initial counter-example config:
-     *   default: all-zero init (same as v2 Python)
-     *   optional: random init via env CEGIS_INIT_MODE=random
-     *             reproducible with env CEGIS_INIT_SEED=<unsigned>
-     */
-    const char *init_mode = getenv("CEGIS_INIT_MODE");
-    int use_random_init = (init_mode != NULL && strcmp(init_mode, "random") == 0);
-    unsigned seed = parse_seed_or_default(getenv("CEGIS_INIT_SEED"), (unsigned)time(NULL));
-    srand(seed);
-    for (int i = 0; i < NUM_NODES; i++)
-        counter_examples[0].init[i] = use_random_init ? (rand() & 1) : 0;
-
-    printf("[init_cex] mode=%s seed=%u init=[", use_random_init ? "random" : "all_zero", seed);
-    for (int i = 0; i < NUM_NODES; i++)
-        printf("%d%s", counter_examples[0].init[i], i < NUM_NODES - 1 ? "," : "");
-    printf("]\n");
-
+    /* Initial counter-example: same as v2 Python (all-zero init, no crash, loss all true = all delivered) */
+    for (int i = 0; i < NUM_NODES; i++) counter_examples[0].init[i] = 0;
     for (int r = 0; r < NUM_ROUNDS; r++) {
         for (int i = 0; i < NUM_NODES; i++) {
             counter_examples[0].crash_send[r][i] = false;
@@ -91,7 +34,6 @@ int main(void) {
                 counter_examples[0].loss[r][src][dst] = true;
         }
     }
-    print_counter_examples_preview(counter_examples, num_cex, CEX_PREVIEW_LIMIT);
 
     int iteration = 0;
     double tot_synth_gen = 0, tot_synth_solve = 0, tot_synth_model = 0, tot_synth_total = 0;
@@ -102,7 +44,8 @@ int main(void) {
     double tot_synth_ast_count = 0, tot_verify_ast_count = 0;
     unsigned final_synth_constraints = 0;
     unsigned final_verify_constraints = 0;
-    unsigned long long final_synth_ast_nodes = 0, final_verify_ast_nodes = 0;
+    unsigned long long final_synth_ast_nodes = 0;
+    unsigned long long final_verify_ast_nodes = 0;
 
     for (;;) {
         iteration++;
@@ -162,15 +105,15 @@ int main(void) {
             Z3_del_context(ctx);
             printf("\nSUCCESS! Valid Distributed Protocol Synthesized.\n");
             printf("============================================================\n");
-            printf("generated protocol (SM table): input pattern -> output 0/1\n");
-            printf("0/1=received, 2=missing\n");
+            printf("generated protocol (canonical SM table): (count0,count1,count2) -> output 0/1\n");
             printf("============================================================\n");
             for (int r = 0; r < NUM_ROUNDS; r++) {
                 printf("\nRound %d Rules:\n", r + 1);
                 for (int p = 0; p < g_num_patterns && p < 10; p++) {
-                    printf("  (");
-                    for (int k = 0; k < NUM_NODES; k++) printf("%d%s", patterns[p * NUM_NODES + k], k < NUM_NODES - 1 ? "," : "");
-                    printf(") -> %d\n", candidate.sm[r * g_num_patterns + p]);
+                    int count0 = patterns[p * 2];
+                    int count1 = patterns[p * 2 + 1];
+                    int count2 = NUM_NODES - count0 - count1;
+                    printf("  (%d,%d,%d) -> %d\n", count0, count1, count2, candidate.sm[r * g_num_patterns + p]);
                 }
                 if (g_num_patterns > 10) printf("  ... (%d patterns total)\n", g_num_patterns);
             }
@@ -252,7 +195,6 @@ int main(void) {
         }
         Z3_del_context(ctx);
         counter_examples[num_cex++] = cex;
-        print_counter_examples_preview(counter_examples, num_cex, CEX_PREVIEW_LIMIT);
         free(candidate.sm);
     }
 

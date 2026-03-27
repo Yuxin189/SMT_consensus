@@ -164,6 +164,9 @@ int verify(Z3_context ctx, const protocol_t *protocol, const int *patterns,
     Z3_solver_assert(ctx, s, Z3_mk_or(ctx, nviol, violations));
     /* m rounds can tolerate at most m-1 crashes: at least (NUM_NODES - NUM_ROUNDS + 1) survivors */
     int min_survivors = NUM_NODES - NUM_ROUNDS + 1;
+
+    /* at most n-1 crashes: at least 1 survivor (independent of NUM_ROUNDS) */
+    /*int min_survivors = 1;
     if (min_survivors < 1) min_survivors = 1;
     /* For "at least k survivors": every subset of size (N-k+1) must have at least one alive */
     int subset_size = NUM_NODES - min_survivors + 1;

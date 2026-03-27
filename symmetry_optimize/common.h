@@ -5,7 +5,7 @@
 #include <stdbool.h>
 #include "config.h"
 
-/* Runtime 3^NUM_NODES, set by main at startup, shared by all modules */
+/* Runtime number of canonical count patterns, set by main at startup, shared by all modules */
 extern int g_num_patterns;
 
 /* One counter-example: same structure as v2 Python (init, crash_send, crash_after, loss) */
@@ -16,7 +16,7 @@ typedef struct {
     bool loss[NUM_ROUNDS][NUM_NODES][NUM_NODES];           /* loss[r][src][dst]=true means delivered */
 } counter_example_t;
 
-/* Protocol: SM table, row-major sm[round * g_num_patterns + pattern_idx] = 0 or 1 */
+/* Protocol: canonical SM table, row-major sm[round * g_num_patterns + pattern_idx] = 0 or 1 */
 typedef struct {
     int *sm;
 } protocol_t;
@@ -41,7 +41,13 @@ typedef struct {
     double violation;
 } timing_t;
 
-/* Generate INPUT_PATTERNS like Python itertools.product([0,1,2], repeat=NUM_NODES); row-major patterns[p*NUM_NODES+k]; g_num_patterns must be set first */
+/* Return number of canonical (count0, count1) patterns: (NUM_NODES + 1)(NUM_NODES + 2)/2. */
+int get_num_canonical_patterns(void);
+
+/* Map (count0, count1) to canonical row-major index. Requires count0 >= 0, count1 >= 0, count0 + count1 <= NUM_NODES. */
+int canonical_index_from_counts(int count0, int count1);
+
+/* Generate canonical patterns as row-major (count0, count1) pairs. Caller allocates patterns[g_num_patterns * 2]. */
 void gen_input_patterns(int *patterns);
 
 /* alive[r][i] = node i alive at start of round r+1 (r=0..NUM_ROUNDS). Caller provides alive[NUM_ROUNDS+1][NUM_NODES]. */
