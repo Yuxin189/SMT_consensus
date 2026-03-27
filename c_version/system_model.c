@@ -28,14 +28,17 @@ void build_trace_concrete(Z3_context ctx, Z3_solver s, Z3_ast *sm_vars,
                           const int *patterns, const char *suffix,
                           Z3_ast S[NUM_ROUNDS + 1][NUM_NODES]) {
     Z3_ast two = mk_int(ctx, 2);
+    Z3_ast init_eqs[NUM_NODES];
     for (int i = 0; i < NUM_NODES; i++) {
         char name[128];
         snprintf(name, sizeof(name), "S_r0_n%d_%s", i, suffix);
         S[0][i] = Z3_mk_const(ctx, Z3_mk_string_symbol(ctx, name), Z3_mk_int_sort(ctx));
-        Z3_solver_assert(ctx, s, Z3_mk_eq(ctx, S[0][i], mk_int(ctx, init[i])));
+        init_eqs[i] = Z3_mk_eq(ctx, S[0][i], mk_int(ctx, init[i]));
     }
+    Z3_solver_assert(ctx, s, NUM_NODES == 1 ? init_eqs[0] : Z3_mk_and(ctx, NUM_NODES, init_eqs));
     for (int r = 1; r <= NUM_ROUNDS; r++) {
         int r1 = r - 1;
+        Z3_ast round_eqs[NUM_NODES];
         for (int i = 0; i < NUM_NODES; i++) {
             Z3_ast recv_vec[NUM_NODES];
             for (int sender = 0; sender < NUM_NODES; sender++) {
@@ -52,8 +55,9 @@ void build_trace_concrete(Z3_context ctx, Z3_solver s, Z3_ast *sm_vars,
             char name[128];
             snprintf(name, sizeof(name), "S_r%d_n%d_%s", r, i, suffix);
             S[r][i] = Z3_mk_const(ctx, Z3_mk_string_symbol(ctx, name), Z3_mk_int_sort(ctx));
-            Z3_solver_assert(ctx, s, Z3_mk_eq(ctx, S[r][i], eq_rhs));
+            round_eqs[i] = Z3_mk_eq(ctx, S[r][i], eq_rhs);
         }
+        Z3_solver_assert(ctx, s, NUM_NODES == 1 ? round_eqs[0] : Z3_mk_and(ctx, NUM_NODES, round_eqs));
     }
 }
 

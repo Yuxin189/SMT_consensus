@@ -31,15 +31,18 @@ bool synthesize(Z3_context ctx, const counter_example_t *counter_examples, int n
     }
     double t_vars_mk = now() - t0;
     t0 = now();
+    Z3_ast *domain_args = (Z3_ast *)malloc((size_t)g_num_patterns * sizeof(Z3_ast));
     for (int r = 0; r < NUM_ROUNDS; r++) {
         for (int p = 0; p < g_num_patterns; p++) {
             Z3_ast or_args[2] = {
                 Z3_mk_eq(ctx, sm_vars[r * g_num_patterns + p], zero),
                 Z3_mk_eq(ctx, sm_vars[r * g_num_patterns + p], one)
             };
-            Z3_solver_assert(ctx, s, Z3_mk_or(ctx, 2, or_args));
+            domain_args[p] = Z3_mk_or(ctx, 2, or_args);
         }
+        Z3_solver_assert(ctx, s, g_num_patterns == 1 ? domain_args[0] : Z3_mk_and(ctx, g_num_patterns, domain_args));
     }
+    free(domain_args);
     double t_vars_add = now() - t0;
     double t_vars = t_vars_mk + t_vars_add;
 
@@ -48,6 +51,10 @@ bool synthesize(Z3_context ctx, const counter_example_t *counter_examples, int n
         const counter_example_t *ce = &counter_examples[idx];
         bool alive[NUM_ROUNDS + 1][NUM_NODES];
         compute_alive_from_crash_after(ce->crash_after, alive);
+        int survivors = 0;
+        for (int i = 0; i < NUM_NODES; i++) {
+            if (alive[NUM_ROUNDS - 1][i]) survivors++;
+        }
         char suffix[32];
         snprintf(suffix, sizeof(suffix), "ce%d", idx);
         Z3_ast S[NUM_ROUNDS + 1][NUM_NODES];
@@ -56,16 +63,18 @@ bool synthesize(Z3_context ctx, const counter_example_t *counter_examples, int n
         t_trace += now() - t_trace_i;
 
         double t_agree_i = now();
-        /* Agreement: surviving nodes cannot contain both 0 and 1. */
-        Z3_ast has_zero = Z3_mk_false(ctx);
-        Z3_ast has_one = Z3_mk_false(ctx);
-        for (int i = 0; i < NUM_NODES; i++) {
-            if (alive[NUM_ROUNDS - 1][i]) {
-                has_zero = Z3_mk_or(ctx, 2, (Z3_ast[]){has_zero, Z3_mk_eq(ctx, S[NUM_ROUNDS][i], zero)});
-                has_one = Z3_mk_or(ctx, 2, (Z3_ast[]){has_one, Z3_mk_eq(ctx, S[NUM_ROUNDS][i], one)});
+        /* Agreement is non-trivial only when there are at least two survivors. */
+        if (survivors >= 2) {
+            Z3_ast has_zero = Z3_mk_false(ctx);
+            Z3_ast has_one = Z3_mk_false(ctx);
+            for (int i = 0; i < NUM_NODES; i++) {
+                if (alive[NUM_ROUNDS - 1][i]) {
+                    has_zero = Z3_mk_or(ctx, 2, (Z3_ast[]){has_zero, Z3_mk_eq(ctx, S[NUM_ROUNDS][i], zero)});
+                    has_one = Z3_mk_or(ctx, 2, (Z3_ast[]){has_one, Z3_mk_eq(ctx, S[NUM_ROUNDS][i], one)});
+                }
             }
+            Z3_solver_assert(ctx, s, Z3_mk_not(ctx, Z3_mk_and(ctx, 2, (Z3_ast[]){has_zero, has_one})));
         }
-        Z3_solver_assert(ctx, s, Z3_mk_not(ctx, Z3_mk_and(ctx, 2, (Z3_ast[]){has_zero, has_one})));
         /* Pairwise version kept for comparison/debugging.
         for (int i = 0; i < NUM_NODES; i++) {
             for (int j = i + 1; j < NUM_NODES; j++) {
@@ -82,17 +91,23 @@ bool synthesize(Z3_context ctx, const counter_example_t *counter_examples, int n
             if (ce->init[i] != 0) all_zero = 0;
             if (ce->init[i] != 1) all_one = 0;
         }
-        if (all_zero) {
+        if (all_zero && survivors > 0) {
+            Z3_ast valid_zero = Z3_mk_true(ctx);
             for (int i = 0; i < NUM_NODES; i++) {
-                Z3_ast dec_i = alive[NUM_ROUNDS - 1][i] ? Z3_mk_true(ctx) : Z3_mk_false(ctx);
-                Z3_solver_assert(ctx, s, Z3_mk_implies(ctx, dec_i, Z3_mk_eq(ctx, S[NUM_ROUNDS][i], zero)));
+                if (!alive[NUM_ROUNDS - 1][i]) continue;
+                Z3_ast node_ok = Z3_mk_eq(ctx, S[NUM_ROUNDS][i], zero);
+                valid_zero = Z3_mk_and(ctx, 2, (Z3_ast[]){valid_zero, node_ok});
             }
+            Z3_solver_assert(ctx, s, valid_zero);
         }
-        if (all_one) {
+        if (all_one && survivors > 0) {
+            Z3_ast valid_one = Z3_mk_true(ctx);
             for (int i = 0; i < NUM_NODES; i++) {
-                Z3_ast dec_i = alive[NUM_ROUNDS - 1][i] ? Z3_mk_true(ctx) : Z3_mk_false(ctx);
-                Z3_solver_assert(ctx, s, Z3_mk_implies(ctx, dec_i, Z3_mk_eq(ctx, S[NUM_ROUNDS][i], one)));
+                if (!alive[NUM_ROUNDS - 1][i]) continue;
+                Z3_ast node_ok = Z3_mk_eq(ctx, S[NUM_ROUNDS][i], one);
+                valid_one = Z3_mk_and(ctx, 2, (Z3_ast[]){valid_one, node_ok});
             }
+            Z3_solver_assert(ctx, s, valid_one);
         }
         t_agree += now() - t_agree_i;
     }
